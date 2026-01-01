@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MPU6050 Game - Jump Edition</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 15px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 15px;
+            font-size: 13px;
+        }
+        
+        .status-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .status.waiting {
+            background: #ffeaa7;
+            color: #d63031;
+        }
+        
+        .status.connected {
+            background: #55efc4;
+            color: #00b894;
+        }
+        
+        .status.active {
+            background: #74b9ff;
+            color: #0984e3;
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        
+        .connection-panel {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        
+        input {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        button:hover:not(:disabled) {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .debug-log {
+            background: #2d3436;
+            color: #00ff00;
+            padding: 8px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-family: 'Courier New', monospace;
+            font-size: 10px;
+            height: 90px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+        
+        .game-area {
+            background: #ecf0f1;
+            border-radius: 15px;
+            padding: 12px;
+            margin-bottom: 12px;
+            position: relative;
+        }
+        
+        canvas {
+            border: 3px solid #667eea;
+            border-radius: 10px;
+            display: block;
+            background: linear-gradient(180deg, #87ceeb 0%, #e0f7ff 100%);
+            margin: 0 auto;
+        }
+        
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .sensor-display {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .sensor-display h3 {
+            color: #667eea;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .sensor-value {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        
+        .label {
+            color: #666;
+            font-weight: bold;
+        }
+        
+        .value {
+            color: #2d3436;
+            font-weight: bold;
+        }
+        
+        .value.active {
+            color: #00b894;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        
+        .instructions {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #2196f3;
+            font-size: 11px;
+        }
+        
+        .instructions h3 {
+            color: #1976d2;
+            margin-bottom: 6px;
+            font-size: 12px;
+        }
+        
+        .jump-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(255, 107, 107, 0.9);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+            display: none;
+            animation: bounce 0.5s;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .jump-indicator.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎮 MPU6050 Jump Game</h1>
+        <div class="subtitle">Ultra-sensitive controls + Jump when tilting up!</div>
+        
+        <div class="status-bar">
+            <div class="status waiting" id="connectionStatus">🔌 Not Connected</div>
+            <div class="status waiting" id="dataStatus">📊 No Data</div>
+            <div class="status waiting" id="movementStatus">🏀 Ball Static</div>
+        </div>
+        
+        <div class="connection-panel">
+            <div class="input-group">
+                <input type="text" id="ipAddress" placeholder="ESP32 IP (default: 192.168.4.1)" value="192.168.4.1">
+                <button id="connectBtn" onclick="connectWebSocket()">🔌 Connect</button>
+            </div>
+            <div style="text-align: center; font-size: 10px; color: #666;">
+                Check Arduino Serial Monitor for IP address
+            </div>
+        </div>
+        
+        <div class="debug-log" id="debugLog">System ready. Click Connect to start...</div>
+        
+        <div class="game-area">
+            <div class="jump-indicator" id="jumpIndicator">⬆️ JUMP!</div>
+            <canvas id="gameCanvas" width="1050" height="500"></canvas>
+        </div>
+        
+        <div class="button-group">
+            <button onclick="resetGame()">🔄 Reset</button>
+            <button onclick="increaseSensitivity()">⚡ Sens: <span id="sensText">2.5x</span></button>
+            <button onclick="testMovement()">🧪 Test</button>
+            <button onclick="toggleDebug()">🐛 Debug</button>
+            <button onclick="toggleGravity()">🌍 Gravity: <span id="gravText">ON</span></button>
+        </div>
+        
+        <div class="controls">
+            <div class="sensor-display">
+                <h3>📊 Accelerometer</h3>
+                <div class="sensor-value">
+                    <span class="label">X (L/R):</span>
+                    <span class="value" id="accelX">0.00</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Y (F/B):</span>
+                    <span class="value" id="accelY">0.00</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Z (U/D):</span>
+                    <span class="value" id="accelZ">0.00</span>
+                </div>
+            </div>
+            
+            <div class="sensor-display">
+                <h3>🌀 Gyroscope</h3>
+                <div class="sensor-value">
+                    <span class="label">X:</span>
+                    <span class="value" id="gyroX">0.00</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Y:</span>
+                    <span class="value" id="gyroY">0.00</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Z:</span>
+                    <span class="value" id="gyroZ">0.00</span>
+                </div>
+            </div>
+            
+            <div class="sensor-display">
+                <h3>💡 System</h3>
+                <div class="sensor-value">
+                    <span class="label">Updates:</span>
+                    <span class="value" id="updateCount">0</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Rate:</span>
+                    <span class="value" id="dataRate">0 Hz</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Light:</span>
+                    <span class="value" id="lightLevel">0%</span>
+                </div>
+            </div>
+            
+            <div class="sensor-display">
+                <h3>🏀 Ball Status</h3>
+                <div class="sensor-value">
+                    <span class="label">X Pos:</span>
+                    <span class="value" id="ballX">0</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Y Pos:</span>
+                    <span class="value" id="ballY">0</span>
+                </div>
+                <div class="sensor-value">
+                    <span class="label">Speed:</span>
+                    <span class="value" id="ballSpeed">0.0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="instructions">
+            <h3>🎮 Game Controls:</h3>
+            <p><strong>Tilt Left/Right:</strong> Move ball horizontally | <strong>Tilt Forward:</strong> Move down | <strong>Tilt Backward (UP):</strong> JUMP! 🚀 | <strong>Goal:</strong> Avoid red obstacles, reach blue finish line</p>
+            <p><strong>Tip:</strong> For jump, tilt the sensor backwards quickly (like lifting it up)</p>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        let ws = null;
+        let connected = false;
+        let updateCount = 0;
+        let sensitivity = 2.5; // Higher default sensitivity
+        let debugVisible = true;
+        let gravityEnabled = true;
+        
+        // Game objects
+        let ball = { 
+            x: 100, 
+            y: canvas.height - 100, 
+            radius: 24, 
+            color: '#ff9500', 
+            vx: 0, 
+            vy: 0,
+            onGround: false,
+            jumpPower: -20 // Jump strength
+        };
+        
+        let obstacles = [
+            { x: 350, y: canvas.height - 130, width: 70, height: 110, color: '#e74c3c' },
+            { x: 600, y: canvas.height - 160, width: 60, height: 140, color: '#e74c3c' },
+            { x: 850, y: canvas.height - 100, width: 80, height: 80, color: '#e74c3c' }
+        ];
+        
+        let finish = { x: 950, y: canvas.height - 130, width: 80, height: 110, color: '#3498db' };
+        let trail = [];
+        let ground = canvas.height - 20;
+        
+        // Sensor data
+        let accelX = 0, accelY = 0, accelZ = 0;
+        let gyroX = 0, gyroY = 0, gyroZ = 0;
+        let lightLevel = 0;
+        let gameState = 'playing';
+        
+        // Debug
+        let debugMessages = [];
+        let lastBallX = ball.x;
+        let lastBallY = ball.y;
+        let updateTimes = [];
+        let lastJumpTime = 0;
+        
+        function log(msg) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugMessages.push(`[${timestamp}] ${msg}`);
+            if (debugMessages.length > 10) debugMessages.shift();
+            if (debugVisible) {
+                document.getElementById('debugLog').textContent = debugMessages.join('\n');
+                document.getElementById('debugLog').scrollTop = document.getElementById('debugLog').scrollHeight;
+            }
+        }
+        
+        function toggleDebug() {
+            debugVisible = !debugVisible;
+            document.getElementById('debugLog').style.display = debugVisible ? 'block' : 'none';
+        }
+        
+        function toggleGravity() {
+            gravityEnabled = !gravityEnabled;
+            document.getElementById('gravText').textContent = gravityEnabled ? 'ON' : 'OFF';
+            log('Gravity: ' + (gravityEnabled ? 'ON' : 'OFF'));
+        }
+        
+        function connectWebSocket() {
+            const ip = document.getElementById('ipAddress').value.trim();
+            
+            if (!ip) {
+                alert('Please enter ESP32 IP address');
+                return;
+            }
+            
+            log('Connecting to ' + ip + ':81...');
+            document.getElementById('connectionStatus').textContent = '🔄 Connecting...';
+            document.getElementById('connectBtn').disabled = true;
+            
+            try {
+                ws = new WebSocket('ws://' + ip + ':81');
+                
+                ws.onopen = function() {
+                    connected = true;
+                    document.getElementById('connectionStatus').className = 'status connected';
+                    document.getElementById('connectionStatus').textContent = '✅ Connected';
+                    document.getElementById('connectBtn').textContent = '✓ Connected';
+                    log('✓ WebSocket connected successfully!');
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.status) {
+                            log('ESP32: ' + data.message);
+                            return;
+                        }
+                        
+                        accelX = parseFloat(data.ax) || 0;
+                        accelY = parseFloat(data.ay) || 0;
+                        accelZ = parseFloat(data.az) || 0;
+                        gyroX = parseFloat(data.gx) || 0;
+                        gyroY = parseFloat(data.gy) || 0;
+                        gyroZ = parseFloat(data.gz) || 0;
+                        lightLevel = parseInt(data.light) || 0;
+                        
+                        updateCount++;
+                        
+                        // Calculate rate
+                        const now = Date.now();
+                        updateTimes.push(now);
+                        if (updateTimes.length > 20) updateTimes.shift();
+                        
+                        if (updateTimes.length > 1) {
+                            const timeSpan = updateTimes[updateTimes.length - 1] - updateTimes[0];
+                            const rate = ((updateTimes.length - 1) / timeSpan * 1000).toFixed(1);
+                            document.getElementById('dataRate').textContent = rate + ' Hz';
+                        }
+                        
+                        document.getElementById('dataStatus').className = 'status active';
+                        document.getElementById('dataStatus').textContent = '📊 Live: ' + updateCount;
+                        
+                        updateDisplay();
+                        
+                        if (updateCount % 30 === 0) {
+                            log(`✓ Data flowing (${updateCount} updates)`);
+                        }
+                        
+                    } catch (e) {
+                        log('Parse error: ' + e.message);
+                    }
+                };
+                
+                ws.onerror = function(error) {
+                    log('❌ Connection error!');
+                    document.getElementById('connectionStatus').className = 'status waiting';
+                    document.getElementById('connectionStatus').textContent = '❌ Error';
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('connectBtn').textContent = '🔌 Retry';
+                };
+                
+                ws.onclose = function() {
+                    connected = false;
+                    log('Connection closed');
+                    document.getElementById('connectionStatus').className = 'status waiting';
+                    document.getElementById('connectionStatus').textContent = '⚠️ Disconnected';
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('connectBtn').textContent = '🔌 Reconnect';
+                    document.getElementById('dataStatus').className = 'status waiting';
+                    document.getElementById('dataStatus').textContent = '📊 No Data';
+                };
+                
+            } catch (e) {
+                log('Failed: ' + e.message);
+                alert('Connection failed: ' + e.message);
+                document.getElementById('connectBtn').disabled = false;
+            }
+        }
+        
+        function updateDisplay() {
+            document.getElementById('accelX').textContent = accelX.toFixed(2);
+            document.getElementById('accelY').textContent = accelY.toFixed(2);
+            document.getElementById('accelZ').textContent = accelZ.toFixed(2);
+            document.getElementById('gyroX').textContent = gyroX.toFixed(1);
+            document.getElementById('gyroY').textContent = gyroY.toFixed(1);
+            document.getElementById('gyroZ').textContent = gyroZ.toFixed(1);
+            document.getElementById('lightLevel').textContent = lightLevel + '%';
+            document.getElementById('updateCount').textContent = updateCount;
+        }
+        
+        function resetGame() {
+            ball.x = 100;
+            ball.y = canvas.height - 100;
+            ball.vx = 0;
+            ball.vy = 0;
+            ball.onGround = false;
+            trail = [];
+            gameState = 'playing';
+            ball.color = '#ff9500';
+            log('Game reset');
+        }
+        
+        function increaseSensitivity() {
+            sensitivity += 0.5;
+            if (sensitivity > 5.0) sensitivity = 1.0;
+            document.getElementById('sensText').textContent = sensitivity.toFixed(1) + 'x';
+            log('Sensitivity: ' + sensitivity.toFixed(1) + 'x');
+        }
+        
+        function testMovement() {
+            log('Testing ball movement...');
+            let testX = ball.x;
+            const interval = setInterval(() => {
+                testX += 10;
+                ball.x = testX;
+                if (testX > 600) {
+                    clearInterval(interval);
+                    ball.x = 100;
+                    log('✓ Ball rendering works!');
+                }
+            }, 50);
+        }
+        
+        // Game loop
+        function gameLoop() {
+            // Clear
+            ctx.fillStyle = '#e8f4f8';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw ground
+            ctx.fillStyle = '#8b7355';
+            ctx.fillRect(0, ground, canvas.width, canvas.height - ground);
+            
+            // Grass effect
+            ctx.fillStyle = '#2ecc71';
+            ctx.fillRect(0, ground - 5, canvas.width, 5);
+            
+            // Update ball
+            if (gameState === 'playing' && connected) {
+                // Horizontal movement (SUPER SENSITIVE)
+                const moveX = accelX * 25 * sensitivity;
+                ball.vx = moveX;
+                ball.x += ball.vx;
+                
+                // Jump detection: When sensor tilts backward (negative accelY means backward)
+                // Also check Z axis for upward shake
+                const jumpThreshold = -0.3; // Tilt backward to jump
+                const now = Date.now();
+                
+                if ((accelY < jumpThreshold || accelZ > 1.3) && ball.onGround && (now - lastJumpTime > 500)) {
+                    ball.vy = ball.jumpPower;
+                    ball.onGround = false;
+                    lastJumpTime = now;
+                    log('🚀 JUMP! (aY=' + accelY.toFixed(2) + ')');
+                    
+                    // Show jump indicator
+                    const indicator = document.getElementById('jumpIndicator');
+                    indicator.classList.add('active');
+                    setTimeout(() => indicator.classList.remove('active'), 500);
+                }
+                
+                // Apply gravity
+                if (gravityEnabled) {
+                    ball.vy += 0.8; // Gravity constant
+                }
+                
+                ball.y += ball.vy;
+                
+                // Ground collision
+                if (ball.y >= ground - ball.radius) {
+                    ball.y = ground - ball.radius;
+                    ball.vy = 0;
+                    ball.onGround = true;
+                } else {
+                    ball.onGround = false;
+                }
+                
+                // Boundaries
+                ball.x = Math.max(ball.radius, Math.min(canvas.width - ball.radius, ball.x));
+                ball.y = Math.max(ball.radius, ball.y);
+                
+                // Trail
+                trail.push({ x: ball.x, y: ball.y });
+                if (trail.length > 70) trail.shift();
+                
+                // Movement status
+                const moved = Math.abs(ball.x - lastBallX) > 0.8 || Math.abs(ball.y - lastBallY) > 0.8;
+                if (moved) {
+                    document.getElementById('movementStatus').className = 'status active';
+                    document.getElementById('movementStatus').textContent = '🏀 Moving!';
+                } else {
+                    document.getElementById('movementStatus').className = 'status waiting';
+                    document.getElementById('movementStatus').textContent = '🏀 Static';
+                }
+                lastBallX = ball.x;
+                lastBallY = ball.y;
+                
+                // Obstacle collisions
+                for (let obs of obstacles) {
+                    if (ball.x + ball.radius > obs.x && 
+                        ball.x - ball.radius < obs.x + obs.width &&
+                        ball.y + ball.radius > obs.y && 
+                        ball.y - ball.radius < obs.y + obs.height) {
+                        gameState = 'collision';
+                        ball.color = '#e74c3c';
+                        log('💥 Hit obstacle!');
+                    }
+                }
+                
+                // Finish line
+                if (ball.x + ball.radius > finish.x && 
+                    ball.x - ball.radius < finish.x + finish.width &&
+                    ball.y + ball.radius > finish.y && 
+                    ball.y - ball.radius < finish.y + finish.height) {
+                    gameState = 'won';
+                    ball.color = '#2ecc71';
+                    log('🎉 You won!');
+                }
+            }
+            
+            // Update display
+            document.getElementById('ballX').textContent = Math.round(ball.x);
+            document.getElementById('ballY').textContent = Math.round(ball.y);
+            const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
+            document.getElementById('ballSpeed').textContent = speed.toFixed(1);
+            
+            // Draw trail
+            if (trail.length > 1) {
+                ctx.strokeStyle = 'rgba(255, 149, 0, 0.6)';
+                ctx.lineWidth = 6;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                for (let i = 0; i < trail.length; i++) {
+                    if (i === 0) ctx.moveTo(trail[i].x, trail[i].y);
+                    else ctx.lineTo(trail[i].x, trail[i].y);
+                }
+                ctx.stroke();
+            }
+            
+            // Draw obstacles
+            for (let obs of obstacles) {
+                ctx.fillStyle = obs.color;
+                ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+                
+                // Highlight
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                ctx.fillRect(obs.x, obs.y, obs.width, 10);
+                
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 35px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('❌', obs.x + obs.width/2, obs.y + obs.height/2 + 12);
+            }
+            
+            // Draw finish
+            ctx.fillStyle = finish.color;
+            ctx.fillRect(finish.x, finish.y, finish.width, finish.height);
+            ctx.fillStyle = 'rgba(255,255,255,0.3)';
+            ctx.fillRect(finish.x, finish.y, finish.width, 15);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 45px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('🏁', finish.x + finish.width/2, finish.y + finish.height/2 + 15);
+            
+            // Draw ball with shadow
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath();
+            ctx.ellipse(ball.x, ground - 5, ball.radius * 0.8, ball.radius * 0.3, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ball gradient
+            const gradient = ctx.createRadialGradient(ball.x - 8, ball.y - 8, 0, ball.x, ball.y, ball.radius * 1.5);
+            gradient.addColorStop(0, '#fff');
+            gradient.addColorStop(0.3, ball.color);
+            gradient.addColorStop(1, ball.color + '00');
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Ball border
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Game overlays
+            ctx.textAlign = 'center';
+            if (gameState === 'collision') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 70px Arial';
+                ctx.fillText('💥 COLLISION!', canvas.width/2, canvas.height/2 - 30);
+                ctx.font = '28px Arial';
+                ctx.fillText('Click Reset to try again', canvas.width/2, canvas.height/2 + 40);
+            } else if (gameState === 'won') {
+                ctx.fillStyle = 'rgba(46, 204, 113, 0.95)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 70px Arial';
+                ctx.fillText('🎉 YOU WIN!', canvas.width/2, canvas.height/2 - 30);
+                ctx.font = '28px Arial';
+                ctx.fillText('Click Reset to play again', canvas.width/2, canvas.height/2 + 40);
+            }
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Start
+        gameLoop();
+        log('🎮 Game ready! Connect ESP32 to start playing.');
+    </script>
+</body>
+</html>
